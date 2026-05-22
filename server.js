@@ -1,3 +1,6 @@
+const multer = require('multer')
+const upload = multer({ storage: multer.memoryStorage() }) // Guarda a foto na memória antes de enviar ao Supabase
+
 require('dotenv').config()
 const express = require('express')
 const { createClient } = require('@supabase/supabase-js')
@@ -37,11 +40,9 @@ function verificarToken(req, res, next) {
     req.usuarioLogado = verificado // Dados do token (id, email) ficam disponíveis aqui
     next()
   } catch (err) {
-    res
-      .status(401)
-      .json({
-        erro: 'Sessão expirada ou token inválido. Faça login novamente.',
-      })
+    res.status(401).json({
+      erro: 'Sessão expirada ou token inválido. Faça login novamente.',
+    })
   }
 }
 
@@ -272,6 +273,53 @@ app.get('/teste-conexao', async (req, res) => {
     res.status(500).json({ erro: err.message })
   }
 })
+
+// ROTA PARA ADICIONAR FOTO NA GALERIA DA PROFISSIONAL
+app.post(
+  '/profissionais/upload-foto',
+  verificarToken,
+  upload.single('foto'),
+  async (req, res) => {
+    try {
+      const file = req.file
+      const { id_profissional } = req.body
+
+      if (!file) return res.status(400).json({ erro: 'Nenhuma foto enviada.' })
+
+      // 1. Gerar um nome único para o arquivo
+      const nomeArquivo = `${id_profissional}/${Date.now()}-${file.originalname}`
+
+      // 2. Enviar para o Supabase Storage
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('galeria-trabalhos')
+        .upload(nomeArquivo, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true,
+        })
+
+      if (storageError) throw storageError
+
+      // 3. Pegar o Link Público da foto
+      const { data: publicUrlData } = supabase.storage
+        .from('galeria-trabalhos')
+        .getPublicUrl(nomeArquivo)
+
+      const urlFinal = publicUrlData.publicUrl
+
+      // 4. Salvar o link na tabela do Banco de Dados
+      const { data: dbData, error: dbError } = await supabase
+        .from('profissionais_fotos')
+        .insert([{ id_profissional, url_foto: urlFinal }])
+        .select()
+
+      if (dbError) throw dbError
+
+      res.json({ mensagem: 'Foto adicionada à galeria! ✨', foto: dbData[0] })
+    } catch (error) {
+      res.status(500).json({ erro: error.message })
+    }
+  },
+)
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
