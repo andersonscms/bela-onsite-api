@@ -66,6 +66,28 @@ app.get('/servicos/:id', async (req, res) => {
   res.json(data)
 })
 
+// -----------------------------------------------------------
+// ROTA PARA BUSCAR A GALERIA DE FOTOS DA PROFISSIONAL
+// -----------------------------------------------------------
+app.get('/profissionais/:id/galeria', async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const { data, error } = await supabase
+      .from('profissionais_fotos')
+      .select('*')
+      .eq('id_profissional', id)
+
+    if (error) throw error
+
+    res.json(data)
+  } catch (error) {
+    res
+      .status(500)
+      .json({ erro: 'Erro ao buscar galeria', detalhes: error.message })
+  }
+})
+
 app.get('/perfil-profissional/:id', async (req, res) => {
   const { id } = req.params
   const { data, error } = await supabase
