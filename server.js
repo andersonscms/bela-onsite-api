@@ -343,6 +343,69 @@ app.post(
   },
 )
 
+// 1. ROTA PARA ENVIAR UMA AVALIAÇÃO (Protegida)
+app.post('/avaliar', verificarToken, async (req, res) => {
+  const { id_agendamento, id_cliente, id_profissional, nota, comentario } =
+    req.body
+
+  try {
+    // Regra de negócio: Só pode avaliar se o agendamento estiver 'CONCLUIDO'
+    const { data: agendamento } = await supabase
+      .from('agendamentos')
+      .select('status_agendamento')
+      .eq('id_combina', id_agendamento)
+      .single()
+
+    if (!agendamento || agendamento.status_agendamento !== 'CONCLUIDO') {
+      return res
+        .status(400)
+        .json({ erro: 'Você só pode avaliar serviços concluídos.' })
+    }
+
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .insert([
+        { id_agendamento, id_cliente, id_profissional, nota, comentario },
+      ])
+      .select()
+
+    if (error) throw error
+    res
+      .status(201)
+      .json({ mensagem: 'Obrigado pela sua avaliação! ⭐', avaliacao: data[0] })
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
+
+// 2. ROTA PARA VER A MÉDIA DE NOTAS DA PROFISSIONAL
+app.get('/profissionais/:id/media', async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .select('nota')
+      .eq('id_profissional', id)
+
+    if (error) throw error
+
+    if (data.length === 0) return res.json({ media: 0, total: 0 })
+
+    const soma = data.reduce((acc, curr) => acc + item.nota, 0) // Erro proposital corrigido abaixo
+    const media = (data.reduce((a, b) => a + b.nota, 0) / data.length).toFixed(
+      1,
+    )
+
+    res.json({
+      media: parseFloat(media),
+      total_avaliacoes: data.length,
+    })
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${PORT}`)

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Bela On Site - Painel de Teste</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 30px; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+        h2 { color: #6200ee; font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; color: #555; }
+        input, button { display: block; width: 100%; margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { background: #6200ee; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #4b00b0; }
+        .token-area { background: #fffde7; padding: 10px; border: 1px dashed #fbc02d; border-radius: 8px; margin-bottom: 15px; display: none; }
+        .token-text { font-size: 0.7rem; word-break: break-all; color: #7f8c8d; }
+        #status { font-weight: bold; margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <!-- PASSO 1: LOGIN -->
+    <div class="card">
+        <h2>1. Identificação (Login)</h2>
+        <label>E-mail cadastrado:</label>
+        <input type="email" id="email" value="ricardo@teste.com">
+        <label>Senha:</label>
+        <input type="password" id="senha" value="123">
+        <button onclick="realizarLogin()">Liberar Acesso 🔑</button>
+        
+        <div id="token_container" class="token-area">
+            <span style="color: #27ae60;">✅ Token capturado!</span>
+            <p class="token-text" id="token_val"></p>
+        </div>
+    </div>
+
+    <!-- PASSO 2: UPLOAD -->
+    <div class="card">
+        <h2>2. Enviar Foto para a Aline</h2>
+        <label>ID da Profissional:</label>
+        <input type="number" id="id_prof" value="1">
+        <label>Selecione a Imagem:</label>
+        <input type="file" id="arquivo" accept="image/*">
+        <button id="btn_upload" onclick="realizarUpload()" style="background: #00c853;">Enviar Foto ✨</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let tokenGlobal = "";
+        const API_URL = "https://bela-onsite-api.onrender.com";
+
+        async function realizarLogin() {
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+            const status = document.getElementById('status');
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, senha })
+                });
+                const data = await response.json();
+
+                if (data.token) {
+                    tokenGlobal = data.token;
+                    document.getElementById('token_container').style.display = 'block';
+                    document.getElementById('token_val').innerText = tokenGlobal;
+                    status.innerHTML = "<span style='color:green'>Login OK! Agora selecione a foto.</span>";
+                } else {
+                    alert("Erro: " + (data.erro || "Falha no login"));
+                }
+            } catch (err) {
+                alert("Erro de conexão: " + err.message);
+            }
+        }
+
+        async function realizarUpload() {
+            if (!tokenGlobal) return alert("Por favor, clique no botão 'Liberar Acesso' primeiro!");
+            
+            const fileInput = document.getElementById('arquivo');
+            const idProf = document.getElementById('id_prof').value;
+            const status = document.getElementById('status');
+
+            if (!fileInput.files[0]) return alert("Escolha uma foto antes.");
+
+            const formData = new FormData();
+            formData.append('foto', fileInput.files[0]);
+            formData.append('id_profissional', idProf);
+
+            status.innerHTML = "⏳ Enviando para o servidor...";
+
+            try {
+                const response = await fetch(`${API_URL}/profissionais/upload-foto`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${tokenGlobal}` },
+                    body: formData
+                });
+                const resData = await response.json();
+                
+                if (response.ok) {
+                    status.innerHTML = "<span style='color:green'>🏆 SUCESSO! Foto salva na galeria.</span>";
+                    console.log(resData);
+                } else {
+                    status.innerHTML = "<span style='color:red'>❌ Erro: " + resData.erro + "</span>";
+                }
+            } catch (err) {
+                status.innerHTML = "<span style='color:red'>❌ Erro de rede: " + err.message + "</span>";
+            }
+        }
+    </script>
+</body>
+</html>
