@@ -405,6 +405,71 @@ app.get('/profissionais/:id/media', async (req, res) => {
     res.status(500).json({ erro: error.message })
   }
 })
+///////
+// ROTA: RESUMO FINANCEIRO DO PROFISSIONAL (Protegida)
+app.get('/financeiro/resumo', verificarToken, async (req, res) => {
+  const id_profissional = req.usuarioLogado.id // Pega o ID direto do Token de quem está logado
+
+  try {
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .select('valor_total, valor_comissao_plataforma, status_agendamento')
+      .eq('id_profissional', id_profissional)
+      .eq('status_agendamento', 'CONCLUIDO') // Só conta o que já foi finalizado
+
+    if (error) throw error
+
+    // Lógica de cálculo
+    const totalBruto = data.reduce(
+      (acc, item) => acc + parseFloat(item.valor_total || 0),
+      0,
+    )
+    const totalComissao = data.reduce(
+      (acc, item) => acc + parseFloat(item.valor_comissao_plataforma || 0),
+      0,
+    )
+    const totalLiquido = totalBruto - totalComissao
+
+    res.json({
+      total_servicos: data.length,
+      faturamento_bruto: totalBruto.toFixed(2),
+      comissao_plataforma: totalComissao.toFixed(2),
+      saldo_a_receber: totalLiquido.toFixed(2),
+    })
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
+
+// ROTA: AGENDA DO DIA PARA O PROFISSIONAL (Protegida)
+app.get('/agenda/hoje', verificarToken, async (req, res) => {
+  const id_profissional = req.usuarioLogado.id
+  const hoje = new Date().toISOString().split('T')[0] // Pega a data de hoje (YYYY-MM-DD)
+
+  try {
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .select(
+        `
+        id_combina,
+        data_hora_inicio,
+        status_agendamento,
+        endereco_atendimento,
+        usuarios!id_cliente ( nome, telefone ),
+        servicos ( nome_servico )
+      `,
+      )
+      .eq('id_profissional', id_profissional)
+      .gte('data_hora_inicio', `${hoje}T00:00:00Z`)
+      .lte('data_hora_inicio', `${hoje}T23:59:59Z`)
+      .order('data_hora_inicio', { ascending: true })
+
+    if (error) throw error
+    res.json(data)
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
