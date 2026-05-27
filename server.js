@@ -470,6 +470,64 @@ app.get('/agenda/hoje', verificarToken, async (req, res) => {
     res.status(500).json({ erro: error.message })
   }
 })
+///
+
+// -----------------------------------------------------------
+// 1. ROTA DE CANCELAMENTO (Para o Cliente)
+// -----------------------------------------------------------
+app.patch('/agendamentos/:id/cancelar', verificarToken, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .update({ status_agendamento: 'CANCELADO' })
+      .eq('id_combina', id)
+      .select()
+
+    if (error) throw error
+    res.json({
+      mensagem: 'Agendamento cancelado com sucesso. 🗑️',
+      agendamento: data[0],
+    })
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
+
+// -----------------------------------------------------------
+// 2. ROTA DE DASHBOARD / FATURAMENTO (Para a Administradora)
+// -----------------------------------------------------------
+app.get('/admin/faturamento', verificarToken, async (req, res) => {
+  try {
+    // Busca todos os agendamentos concluídos
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .select('valor_total, valor_comissao_plataforma')
+      .eq('status_agendamento', 'CONCLUIDO')
+
+    if (error) throw error
+
+    // Calcula os totais
+    const faturamentoTotal = data.reduce(
+      (acc, item) => acc + parseFloat(item.valor_total || 0),
+      0,
+    )
+    const lucroPlataforma = data.reduce(
+      (acc, item) => acc + parseFloat(item.valor_comissao_plataforma || 0),
+      0,
+    )
+
+    res.json({
+      quantidade_servicos: data.length,
+      faturamento_bruto: `R$ ${faturamentoTotal.toFixed(2)}`,
+      lucro_estimado_plataforma: `R$ ${lucroPlataforma.toFixed(2)}`,
+      ticket_medio: `R$ ${(faturamentoTotal / (data.length || 1)).toFixed(2)}`,
+    })
+  } catch (error) {
+    res.status(500).json({ erro: error.message })
+  }
+})
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
